@@ -128,9 +128,9 @@ class TransformDataset(Dataset):
             # B, 3, H, W
             return torch.clamp(ten, 0, 1).permute(3, 0, 1, 2)
 
-        # images = denormalize(image)
+        images = denormalize(image)
         images_to_save = []
-        for lm, img in zip(landmarks, image):
+        for lm, img in zip(landmarks, images):
             img = img.permute(1, 2, 0).numpy()*255
             h, w, _ = img.shape
             lm = (lm + 0.5) * np.array([w, h]) # convert to image pixel coordinates
