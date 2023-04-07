@@ -7,12 +7,117 @@ from torch.utils.data import DataLoader, Dataset, random_split
 import albumentations as A
 from albumentations import Compose
 from albumentations.pytorch.transforms import ToTensorV2
-
+import cv2
 import os
 from xml.etree import ElementTree as ET
 import numpy as np
 from PIL import Image, ImageDraw
 
+class VideoDataset(Dataset):
+    def __init__(self, data_dir, video_file):
+        self.data_dir = data_dir
+        self.frames = self._load_frames(data_dir, video_file)
+
+    def __len__(self):
+        return len(self.frames)
+
+    # return: cropped_image (Tensor), landmarks (np.ndarray) unnormalized
+    def __getitem__(self, idx):
+        sample = self.samples[idx]
+        filename = sample['filename']
+        box_top: int = sample['box_top']
+        box_left: int = sample['box_left']
+        box_width: int = sample['box_width']
+        box_height: int = sample['box_height']
+        landmarks: np.ndarray = sample['landmarks']
+        original_image: Image = Image.open(
+            os.path.join(self.data_dir, filename)).convert('RGB')
+        cropped_image: Image = original_image.crop(
+            (box_left, box_top, box_left+box_width, box_top+box_height))
+
+        return cropped_image, landmarks # unnormalized
+
+    def _load_frames(self, data_dir: str, video_file: str):
+        """Load data from xml file."""
+        video_path = os.path.join(data_dir, video_file)
+        frames = []
+        cap = cv2.VideoCapture(video_path)
+        while True:
+            # Read the next frame from the video
+            ret, frame = cap.read()
+            if not ret:
+                break
+            # Convert the frame to RGB format and normalize it to [0, 1]
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frame = frame.astype('float32') / 255.0
+            
+            # Convert the frame to a PyTorch tensor and add it to the list of frames
+            tensor = torch.from_numpy(frame)
+            #print (tensor.shape)
+            #convert tensor to numpy
+            array = tensor.numpy()
+            # transformed = transform(image=array)
+            
+            #print(tensor.shape) #batch,3,480,480
+            frames.append(tensor)
+
+        # Release the video file handle
+        cap.release()
+        return frames
+
+class TransformDataset(Dataset):
+    def __init__(self, dataset: VideoDataset, transform: Optional[Compose] = None):
+        self.dataset = dataset
+        if transform is not None:
+            self.transform = transform
+        else:
+            self.transform = Compose([
+                A.Resize(224, 224),
+                A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+                ToTensorV2(),
+            ])
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, frame):
+        # image in PIL format, landmarks in image pixel coordinates
+        frame = np.array(frame)
+        transformed = self.transform(
+            image=frame)
+        return frame # center and normalize
+
+    # @staticmethod
+    # def collate_fn(batch):
+    #     images, landmarks = zip(*batch)
+    #     return torch.stack(images), np.stack(landmarks)
+
+    ## assume image batch tensor, normalized by imagenet
+    @staticmethod
+    def annotate_tensor(image: torch.Tensor, landmarks: np.ndarray) -> Image:
+
+        IMG_MEAN = [0.485, 0.456, 0.406]
+        IMG_STD = [0.229, 0.224, 0.225]
+
+        def denormalize(x, mean=IMG_MEAN, std=IMG_STD) -> torch.Tensor:
+            # 3, H, W, B
+            ten = x.clone().permute(1, 2, 3, 0)
+            for t, m, s in zip(ten, mean, std):
+                t.mul_(s).add_(m)
+            # B, 3, H, W
+            return torch.clamp(ten, 0, 1).permute(3, 0, 1, 2)
+
+        images = denormalize(image)
+        # print(torch.mean(images), torch.mean(landmarks)) #1 3 224 224, 1 68 2
+        images_to_save = []
+        for lm, img in zip(landmarks, images):
+            img = img.permute(1, 2, 0).numpy()*255
+            h, w, _ = img.shape
+            lm = (lm + 0.5) * np.array([w, h]) # convert to image pixel coordinates
+            img = DlibDataset.annotate_image(Image.fromarray(img.astype(np.uint8)), lm)
+            images_to_save.append( torchvision.transforms.ToTensor()(img) )
+
+        return torch.stack(images_to_save)
 
 class DlibDataset(Dataset):
     def __init__(self, data_dir, xml_file):
@@ -129,6 +234,7 @@ class TransformDataset(Dataset):
             return torch.clamp(ten, 0, 1).permute(3, 0, 1, 2)
 
         images = denormalize(image)
+        # print(torch.mean(images), torch.mean(landmarks)) #1 3 224 224, 1 68 2
         images_to_save = []
         for lm, img in zip(landmarks, images):
             img = img.permute(1, 2, 0).numpy()*255
@@ -172,7 +278,7 @@ class DlibDataModule(LightningDataModule):
         self,
         data_train: DlibDataset,
         data_test: DlibDataset,
-        data_dir: str = "data/ibug_300W_large_face_landmark_dataset",
+        data_dir: str = "",
         train_val_test_split=None,
         transform_train: Optional[Compose] = None,
         transform_val: Optional[Compose] = None,

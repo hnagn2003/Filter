@@ -12,6 +12,8 @@ from albumentations import Compose
 from albumentations.pytorch.transforms import ToTensorV2
 import torchvision
 import numpy as np
+import cv2
+
 
 pyrootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
 from src.data.dlib_datamodule import TransformDataset  # noqa: E402
@@ -91,12 +93,15 @@ def evaluate(cfg: DictConfig) -> Tuple[dict, dict]:
     #     print("output_path:", cfg.paths.output_dir + "/eval_result.png")
     #     torchvision.utils.save_image(annotated_image, cfg.paths.output_dir + "/eval_result.png")
     #     break
-    
-    #1 image
+    # return metric_dict, object_dict
 
-    annotated_image = eval_image(model=model, image_path='data/ibug_tiny/lfpw/trainset/image_0447.png')
-    torchvision.utils.save_image(annotated_image, "eval_result.png")
-    return metric_dict, object_dict
+    #1 image
+    import cv2
+
+    # annotated_image = eval_image(model=model, image_path='data/ibug_tiny/helen/trainset/146827737_1.jpg')
+    # _ = cv2.imwrite('eval_result.png', annotated_image)
+    # # torchvision.utils.save_image(annotated_image, "eval_result.png")
+    # return metric_dict, object_dict
 
     #FOR VIDEO
     import cv2
@@ -106,7 +111,7 @@ def evaluate(cfg: DictConfig) -> Tuple[dict, dict]:
     from albumentations.pytorch.transforms import ToTensorV2
     import numpy as np
     # Open the video file
-    cap = cv2.VideoCapture('src/video.mp4')
+    cap = cv2.VideoCapture('data/ibug_tiny/video.mp4')
 
     # Loop over the frames and convert them to tensors
     frames = []
@@ -162,18 +167,61 @@ def eval_image(image_path, model):
         A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ToTensorV2(),
     ])
-    input_image = Image.open(image_path).convert('RGB')
-    input_image = np.array(input_image)
-    print(input_image.shape)
-    input_tensor = transform(image=input_image)
+    # input_image = Image.open(image_path).convert('RGB')
+    # input_image = np.array(input_image)
+    # print(input_image.shape)
+    # input_tensor = transform(image=input_image)
+    # input_tensor = input_tensor['image'].unsqueeze(0)
+    # # print(input_tensor.size())
+    # with torch.no_grad():
+    #     output_tensor = model(input_tensor)
+    # # prediction = torch.argmax(output_tensor, dim=1)
+    # print(input_tensor.shape, output_tensor.shape) #1 3 224 224, 1 68 2
+    # annotated_image = TransformDataset.annotate_tensor(input_tensor, output_tensor)
+    # cv2.imshow('image', cv2.imread('data/ibug_tiny/helen/trainset/146827737_1.jpg'))
+    
+    faceCascade = cv2.CascadeClassifier('data/ibug_tiny/haarcascade_frontalface_default.xml')
+    
+    img = cv2.imread('data/ibug_tiny/helen/trainset/146827737_1.jpg')
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    faces = faceCascade.detectMultiScale(
+        gray,
+        scaleFactor=1.1,
+        minNeighbors=5,
+        minSize=(30, 30),
+        flags=cv2.CASCADE_SCALE_IMAGE
+    )
+    face_crop = None
+    x, y, w, h = faces[0]
+    # Crop the face
+    face_crop = img[y:y+h, x:x+w]
+
+    # Save the face crop
+    cv2.imwrite(f'face{0}.jpg', face_crop)
+    # Convert the image to a NumPy array
+    img_np = np.array(face_crop)
+
+    input_tensor = transform(image=img_np)
+    # print(input_tensor['image'].shape)
     input_tensor = input_tensor['image'].unsqueeze(0)
     # print(input_tensor.size())
     with torch.no_grad():
         output_tensor = model(input_tensor)
-    # prediction = torch.argmax(output_tensor, dim=1)
     print(input_tensor.shape, output_tensor.shape) #1 3 224 224, 1 68 2
     annotated_image = TransformDataset.annotate_tensor(input_tensor, output_tensor)
-    return annotated_image
+    
+    #convert tensor to opencv and restore its size
+    rgb_tensor = torch.clamp(annotated_image.squeeze(0), 0, 1) * 255
+    # Convert the tensor to a numpy array
+    rgb_numpy = np.uint8(rgb_tensor.permute(1, 2, 0).numpy())
+
+    # Create an OpenCV image from the numpy array    
+    resized_image = cv2.resize(rgb_numpy, (w, h))
+    print(img.shape, resized_image.shape)
+    img[y:y+h, x:x+w] = resized_image
+    
+    return img
 
 if __name__ == "__main__":
     main()
