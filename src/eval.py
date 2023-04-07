@@ -141,7 +141,7 @@ def evaluate(cfg: DictConfig) -> Tuple[dict, dict]:
 
     # Create a VideoWriter object
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    video_writer = cv2.VideoWriter('output.mp4', fourcc, fps, (video_width, video_height))
+    video_writer = cv2.VideoWriter('output2.mp4', fourcc, fps, (video_width, video_height))
 
     # Write the images to the video
     for frame in frames:
@@ -194,34 +194,32 @@ def eval_image(img, model):
     # if no face detected
     if (len(faces) == 0):
         return img
-    face_crop = None
-    x, y, w, h = faces[0]
-    # Crop the face
-    face_crop = img[y:y+h, x:x+w]
+    for face in faces:
+        x, y, w, h = face
+        # Crop the face
+        face_crop = img[y:y+h, x:x+w]
 
-    # Save the face crop
-    cv2.imwrite(f'face{0}.jpg', face_crop)
-    # Convert the image to a NumPy array
-    img_np = np.array(face_crop)
+        # Convert the image to a NumPy array
+        img_np = np.array(face_crop)
 
-    input_tensor = transform(image=img_np)
-    # print(input_tensor['image'].shape)
-    input_tensor = input_tensor['image'].unsqueeze(0)
-    # print(input_tensor.size())
-    with torch.no_grad():
-        output_tensor = model(input_tensor)
-    #print(input_tensor.shape, output_tensor.shape) #1 3 224 224, 1 68 2
-    annotated_image = TransformDataset.annotate_tensor(input_tensor, output_tensor)
-    
-    #convert tensor to opencv and restore its size
-    rgb_tensor = torch.clamp(annotated_image.squeeze(0), 0, 1) * 255
-    # Convert the tensor to a numpy array
-    rgb_numpy = np.uint8(rgb_tensor.permute(1, 2, 0).numpy())
+        input_tensor = transform(image=img_np)
+        # print(input_tensor['image'].shape)
+        input_tensor = input_tensor['image'].unsqueeze(0)
+        # print(input_tensor.size())
+        with torch.no_grad():
+            output_tensor = model(input_tensor)
+        #print(input_tensor.shape, output_tensor.shape) #1 3 224 224, 1 68 2
+        annotated_image = TransformDataset.annotate_tensor(input_tensor, output_tensor)
+        
+        #convert tensor to opencv and restore its size
+        rgb_tensor = torch.clamp(annotated_image.squeeze(0), 0, 1) * 255
+        # Convert the tensor to a numpy array
+        rgb_numpy = np.uint8(rgb_tensor.permute(1, 2, 0).numpy())
 
-    # Create an OpenCV image from the numpy array    
-    resized_image = cv2.resize(rgb_numpy, (w, h))
-    #print(img.shape, resized_image.shape)
-    img[y:y+h, x:x+w] = resized_image
+        # Create an OpenCV image from the numpy array    
+        resized_image = cv2.resize(rgb_numpy, (w, h))
+        #print(img.shape, resized_image.shape)
+        img[y:y+h, x:x+w] = resized_image
     
     return img
 
