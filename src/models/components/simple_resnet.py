@@ -34,6 +34,7 @@ class SimpleResnet(nn.Module):
 
     def forward(self, x):
         # batch_size, channels, width, height = x.size()
+        # print(x.device)
 
         return self.model(x).reshape(x.size(0), self.output_shape[0], self.output_shape[1])
 
@@ -43,3 +44,4 @@ if __name__ == "__main__":
     m = SimpleResnet()
     output = m(torch.randn(1, 3, 224, 224))
     print(output.shape)
+    

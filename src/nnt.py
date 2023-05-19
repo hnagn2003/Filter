@@ -17,8 +17,8 @@ while True:
         flags=cv2.CASCADE_SCALE_IMAGE
     )
     # Draw a rectangle around the faces
-    x, y, w, h = faces[0]
-    cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+    for (x, y, w, h) in faces:
+        cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
         
     cv2.imshow('crop', frame)
     if cv2.waitKey(1) & 0xFF == ord('q'):

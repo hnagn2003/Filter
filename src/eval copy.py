@@ -127,7 +127,7 @@ def evaluate(cfg: DictConfig) -> Tuple[dict, dict]:
         if not ret:
             break
         # Convert the frame to RGB format and normalize it to [0, 1]
-        # frame = cv2.cvtColor(frame,    cv2.COLOR_BGR2RGB)
+        # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         
         anno_frame = eval_image(frame, model)
         

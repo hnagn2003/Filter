@@ -62,6 +62,8 @@ class DlibLitModule(LightningModule):
     def model_step(self, batch: Any):
         x, y = batch
         preds = self.forward(x)
+        # print(preds.device, y.device)
+        # exit()
         loss = self.criterion(preds, y)
         # print("loss", loss, type(loss))
         # print("preds", preds, type(preds))
@@ -71,7 +73,7 @@ class DlibLitModule(LightningModule):
 
     def training_step(self, batch: Any, batch_idx: int):
         loss, preds, targets = self.model_step(batch)
-
+        print("training...")
         # update and log metrics
         self.train_loss(loss)
         self.train_mae(preds, targets)
@@ -99,6 +101,7 @@ class DlibLitModule(LightningModule):
 
     def validation_step(self, batch: Any, batch_idx: int):
         loss, preds, targets = self.model_step(batch)
+        print("validating...")
 
         # update and log metrics
         self.val_loss(loss)

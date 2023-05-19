@@ -1,4 +1,4 @@
-ARG FROM_IMAGE_NAME=nvcr.io/nvidia/pytorch:23.02-py3
+ARG FROM_IMAGE_NAME=python:3.8.10
 FROM ${FROM_IMAGE_NAME}
 
 # Set working directory
@@ -15,4 +15,4 @@ COPY . .
 RUN git config --global --add safe.directory /workspace
 
 # Run bash by default
-CMD ["bash"]
+CMD ["Snapchat-Filter/main.py --filter face  --footage Snapchat-Filter/m.jpg"]
